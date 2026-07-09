@@ -49,7 +49,7 @@ function compressPDF(inputPath, outputPath, quality) {
         if (quality === 'medium') pdfSettings = '/ebook';
         
         // Ghostscript command
-        const gsCmd = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
+        const gsCmd = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -dAutoRotatePages=/None -dUseCropBox -sOutputFile="${outputPath}" "${inputPath}"`;
         
         exec(gsCmd, (error, stdout, stderr) => {
             if (error) {
