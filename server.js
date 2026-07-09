@@ -64,32 +64,60 @@ function compressPDF(inputPath, outputPath, quality) {
 }
 
 // Compress images using sharp
-async function compressImage(inputPath, outputPath, quality) {
+async function compressImage(inputPath, outputPath, quality, advancedOpts) {
     const ext = path.extname(inputPath).toLowerCase();
     
     // Determine quality percentage
     let q = 80; // High quality
     if (quality === 'maximum') q = 95;
     if (quality === 'medium') q = 60;
+    if (quality === 'extreme') q = 40;
 
     let sharpInstance = sharp(inputPath);
+    let finalOutputPath = outputPath;
+
+    const convertToWebp = advancedOpts && advancedOpts.convertToWebp === 'true';
+    const resizeLarge = advancedOpts && advancedOpts.resizeLarge === 'true';
 
     try {
+        if (resizeLarge) {
+            const metadata = await sharpInstance.metadata();
+            if (metadata.width > 2000 || metadata.height > 2000) {
+                sharpInstance = sharpInstance.resize({
+                    width: 2000,
+                    height: 2000,
+                    fit: 'inside',
+                    withoutEnlargement: true
+                });
+            }
+        }
+
+        if (convertToWebp && ['.jpg', '.jpeg', '.png'].includes(ext)) {
+            finalOutputPath = outputPath.substring(0, outputPath.lastIndexOf('.')) + '.webp';
+            await sharpInstance.webp({ quality: q, effort: 6 }).toFile(finalOutputPath);
+            return finalOutputPath;
+        }
+
         if (ext === '.jpg' || ext === '.jpeg') {
-            await sharpInstance.jpeg({ quality: q }).toFile(outputPath);
+            await sharpInstance.jpeg({ quality: q, mozjpeg: true }).toFile(finalOutputPath);
         } else if (ext === '.png') {
-            await sharpInstance.png({ quality: q, compressionLevel: 9 }).toFile(outputPath);
+            if (quality === 'extreme' || quality === 'medium') {
+                await sharpInstance.png({ palette: true, quality: q, compressionLevel: 9 }).toFile(finalOutputPath);
+            } else {
+                await sharpInstance.png({ compressionLevel: 9 }).toFile(finalOutputPath);
+            }
         } else if (ext === '.webp') {
-            await sharpInstance.webp({ quality: q }).toFile(outputPath);
+            await sharpInstance.webp({ quality: q, effort: 6 }).toFile(finalOutputPath);
         } else {
             // Fallback for unsupported image types
-            fs.copyFileSync(inputPath, outputPath);
+            fs.copyFileSync(inputPath, finalOutputPath);
         }
     } catch (err) {
         console.error('Image compression error:', err);
         fs.copyFileSync(inputPath, outputPath);
+        return outputPath;
     }
-    return outputPath;
+    return finalOutputPath;
 }
 
 // POST endpoint to handle upload and compression
@@ -99,6 +127,8 @@ app.post('/compress', upload.array('pdfs'), async (req, res) => {
         const quality = req.body.quality || 'high';
         const files = req.files;
         const paths = [].concat(req.body.paths || []);
+        const convertToWebp = req.body.convertToWebp;
+        const resizeLarge = req.body.resizeLarge;
 
         if (!files || files.length === 0) {
             return res.status(400).json({ error: 'No files uploaded' });
@@ -149,7 +179,7 @@ app.post('/compress', upload.array('pdfs'), async (req, res) => {
             if (ext === '.pdf') {
                 await compressPDF(inputPath, outputPath, quality);
             } else if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-                await compressImage(inputPath, outputPath, quality);
+                return await compressImage(inputPath, outputPath, quality, { convertToWebp, resizeLarge });
             } else {
                 fs.copyFileSync(inputPath, outputPath);
             }

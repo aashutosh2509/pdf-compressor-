@@ -91,6 +91,8 @@ compressBtn.addEventListener('click', async () => {
 
     // Get selected quality
     const quality = document.querySelector('input[name="quality"]:checked').value;
+    const convertToWebp = document.getElementById('convertToWebp').checked;
+    const resizeLarge = document.getElementById('resizeLarge').checked;
     
     // Generate a unique session ID for this compression task
     const sessionId = uuidv4();
@@ -98,6 +100,8 @@ compressBtn.addEventListener('click', async () => {
     const formData = new FormData();
     formData.append('sessionId', sessionId);
     formData.append('quality', quality);
+    formData.append('convertToWebp', convertToWebp);
+    formData.append('resizeLarge', resizeLarge);
     
     selectedFiles.forEach(file => {
         formData.append('pdfs', file);
