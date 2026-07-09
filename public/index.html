@@ -1,0 +1,71 @@
+<!DOCTYPE strict>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High Quality PDF Compressor</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PDF Compressor</h1>
+            <p>Compress your PDFs and folders securely with no loss in visible quality.</p>
+        </header>
+
+        <main>
+            <div class="upload-section" id="drop-area">
+                <input type="file" id="fileElem" multiple accept="application/pdf">
+                <label class="button" for="fileElem">Select PDFs</label>
+                <p>or drag and drop your PDFs here</p>
+                <div id="file-list" class="file-list"></div>
+            </div>
+
+            <div class="options-section">
+                <h3>Compression Quality</h3>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="quality" value="high" checked>
+                        <div class="radio-content">
+                            <span class="title">High Quality (Recommended)</span>
+                            <span class="desc">Excellent size reduction, looks perfect on screen and print.</span>
+                        </div>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="quality" value="maximum">
+                        <div class="radio-content">
+                            <span class="title">Maximum Quality</span>
+                            <span class="desc">Keeps highest possible color details. Smaller size reduction.</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button id="compress-btn" class="primary-btn" disabled>Compress Files</button>
+            </div>
+
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Compressing your files... Please wait.</p>
+            </div>
+
+            <div id="results-section" class="results-section hidden">
+                <h3>Compression Complete! 🎉</h3>
+                <div id="compression-stats" style="margin-bottom: 1.5rem; color: var(--text-main); font-size: 0.95rem;">
+                    <!-- Stats will be populated here -->
+                </div>
+                <div class="result-actions">
+                    <a id="download-link" href="#" class="primary-btn success">Download Compressed</a>
+                    <a id="undo-link" href="#" class="secondary-btn">Undo & Download Originals</a>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/uuid@8.3.2/dist/umd/uuidv4.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
