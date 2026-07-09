@@ -6,6 +6,8 @@ const archiver = require('archiver');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const crypto = require('crypto');
+const sharp = require('sharp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,7 +36,8 @@ const storage = multer.diskStorage({
         cb(null, sessionDir);
     },
     filename: (req, file, cb) => {
-        cb(null, file.originalname); // Keep original name for zip
+        // Use a unique name to prevent collisions if files from different folders have same name
+        cb(null, uuidv4() + '-' + file.originalname); 
     }
 });
 
@@ -43,19 +46,15 @@ const upload = multer({ storage });
 // Compress a single PDF using Ghostscript
 function compressPDF(inputPath, outputPath, quality) {
     return new Promise((resolve, reject) => {
-        // quality can be /prepress (highest), /printer (high), /ebook (medium), /screen (low)
         let pdfSettings = '/printer';
         if (quality === 'maximum') pdfSettings = '/prepress';
         if (quality === 'medium') pdfSettings = '/ebook';
         
-        // Ghostscript command
         const gsCmd = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -dAutoRotatePages=/None -dUseCropBox -sOutputFile="${outputPath}" "${inputPath}"`;
         
         exec(gsCmd, (error, stdout, stderr) => {
             if (error) {
                 console.error(`Ghostscript error: ${error.message}`);
-                // If Ghostscript fails (e.g. not installed locally), just copy the file as a fallback so app doesn't crash completely.
-                // In production (Render) Ghostscript will be installed via Dockerfile.
                 fs.copyFileSync(inputPath, outputPath);
                 return resolve(outputPath);
             }
@@ -64,41 +63,104 @@ function compressPDF(inputPath, outputPath, quality) {
     });
 }
 
+// Compress images using sharp
+async function compressImage(inputPath, outputPath, quality) {
+    const ext = path.extname(inputPath).toLowerCase();
+    
+    // Determine quality percentage
+    let q = 80; // High quality
+    if (quality === 'maximum') q = 95;
+    if (quality === 'medium') q = 60;
+
+    let sharpInstance = sharp(inputPath);
+
+    try {
+        if (ext === '.jpg' || ext === '.jpeg') {
+            await sharpInstance.jpeg({ quality: q }).toFile(outputPath);
+        } else if (ext === '.png') {
+            await sharpInstance.png({ quality: q, compressionLevel: 9 }).toFile(outputPath);
+        } else if (ext === '.webp') {
+            await sharpInstance.webp({ quality: q }).toFile(outputPath);
+        } else {
+            // Fallback for unsupported image types
+            fs.copyFileSync(inputPath, outputPath);
+        }
+    } catch (err) {
+        console.error('Image compression error:', err);
+        fs.copyFileSync(inputPath, outputPath);
+    }
+    return outputPath;
+}
+
 // POST endpoint to handle upload and compression
 app.post('/compress', upload.array('pdfs'), async (req, res) => {
     try {
         const sessionId = req.body.sessionId;
-        const quality = req.body.quality || 'high'; // high or maximum
+        const quality = req.body.quality || 'high';
         const files = req.files;
+        const paths = [].concat(req.body.paths || []);
 
         if (!files || files.length === 0) {
             return res.status(400).json({ error: 'No files uploaded' });
         }
 
         const sessionUploadDir = path.join(UPLOADS_DIR, sessionId);
+        const sessionStructuredDir = path.join(sessionUploadDir, 'structured');
         const sessionCompressDir = path.join(COMPRESSED_DIR, sessionId);
 
-        if (!fs.existsSync(sessionCompressDir)) {
-            fs.mkdirSync(sessionCompressDir, { recursive: true });
-        }
+        if (!fs.existsSync(sessionCompressDir)) fs.mkdirSync(sessionCompressDir, { recursive: true });
+        if (!fs.existsSync(sessionStructuredDir)) fs.mkdirSync(sessionStructuredDir, { recursive: true });
 
         let totalOriginalSize = 0;
         files.forEach(f => {
             totalOriginalSize += f.size;
         });
 
+        const processedHashes = new Set();
+        let duplicatesRemoved = 0;
+
         // Process all files
-        const compressionPromises = files.map(async (file) => {
-            const inputPath = path.join(sessionUploadDir, file.originalname);
-            const outputPath = path.join(sessionCompressDir, file.originalname);
-            await compressPDF(inputPath, outputPath, quality);
+        const compressionPromises = files.map(async (file, index) => {
+            const relPath = paths[index] || file.originalname;
+            const inputPath = path.join(sessionUploadDir, file.filename);
+            const outputPath = path.join(sessionCompressDir, relPath);
+            const structuredPath = path.join(sessionStructuredDir, relPath);
+
+            // Hash the file to detect exact duplicates
+            const fileBuffer = fs.readFileSync(inputPath);
+            const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+            if (processedHashes.has(hash)) {
+                duplicatesRemoved++;
+                // Skip processing and writing this file to output
+                return null;
+            }
+            processedHashes.add(hash);
+
+            // Ensure directories exist
+            [path.dirname(outputPath), path.dirname(structuredPath)].forEach(d => {
+                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+            });
+
+            // Save original structured file for Undo zip
+            fs.copyFileSync(inputPath, structuredPath);
+
+            const ext = path.extname(relPath).toLowerCase();
+            if (ext === '.pdf') {
+                await compressPDF(inputPath, outputPath, quality);
+            } else if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+                await compressImage(inputPath, outputPath, quality);
+            } else {
+                fs.copyFileSync(inputPath, outputPath);
+            }
             return outputPath;
         });
 
         const outputPaths = await Promise.all(compressionPromises);
+        const validOutputPaths = outputPaths.filter(p => p !== null);
 
         let totalCompressedSize = 0;
-        outputPaths.forEach(p => {
+        validOutputPaths.forEach(p => {
             if (fs.existsSync(p)) {
                 totalCompressedSize += fs.statSync(p).size;
             }
@@ -109,7 +171,8 @@ app.post('/compress', upload.array('pdfs'), async (req, res) => {
             message: 'Files compressed successfully',
             sessionId: sessionId,
             originalSize: totalOriginalSize,
-            compressedSize: totalCompressedSize
+            compressedSize: totalCompressedSize,
+            duplicatesRemoved: duplicatesRemoved
         });
     } catch (err) {
         console.error(err);
@@ -117,50 +180,35 @@ app.post('/compress', upload.array('pdfs'), async (req, res) => {
     }
 });
 
+function sendZipOrFile(dirPath, res, attachmentName) {
+    if (!fs.existsSync(dirPath)) {
+        return res.status(404).send('Files not found or expired.');
+    }
+    const files = fs.readdirSync(dirPath);
+    // If it's a single file and not a directory, just send it
+    if (files.length === 1 && !fs.statSync(path.join(dirPath, files[0])).isDirectory()) {
+        res.download(path.join(dirPath, files[0]));
+    } else {
+        res.attachment(attachmentName);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        archive.pipe(res);
+        archive.directory(dirPath, false);
+        archive.finalize();
+    }
+}
+
 // GET endpoint to download compressed files (as a zip)
 app.get('/download/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
     const sessionCompressDir = path.join(COMPRESSED_DIR, sessionId);
-
-    if (!fs.existsSync(sessionCompressDir)) {
-        return res.status(404).send('Session not found or expired.');
-    }
-
-    const files = fs.readdirSync(sessionCompressDir);
-    if (files.length === 1) {
-        // Single file, download directly
-        res.download(path.join(sessionCompressDir, files[0]));
-    } else {
-        // Multiple files, send as zip
-        res.attachment('compressed_pdfs.zip');
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.pipe(res);
-        archive.directory(sessionCompressDir, false);
-        archive.finalize();
-    }
+    sendZipOrFile(sessionCompressDir, res, 'compressed_files.zip');
 });
 
 // GET endpoint to undo/download original files
 app.get('/undo/:sessionId', (req, res) => {
     const sessionId = req.params.sessionId;
-    const sessionUploadDir = path.join(UPLOADS_DIR, sessionId);
-
-    if (!fs.existsSync(sessionUploadDir)) {
-        return res.status(404).send('Original files not found or expired.');
-    }
-
-    const files = fs.readdirSync(sessionUploadDir);
-    if (files.length === 1) {
-        // Single file, download directly
-        res.download(path.join(sessionUploadDir, files[0]));
-    } else {
-        // Multiple files, send as zip
-        res.attachment('original_pdfs.zip');
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.pipe(res);
-        archive.directory(sessionUploadDir, false);
-        archive.finalize();
-    }
+    const sessionStructuredDir = path.join(UPLOADS_DIR, sessionId, 'structured');
+    sendZipOrFile(sessionStructuredDir, res, 'original_files.zip');
 });
 
 app.listen(PORT, () => {

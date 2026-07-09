@@ -38,15 +38,20 @@ function handleDrop(e) {
 
 function handleFiles(e) {
     const files = [...e.target.files];
-    // Filter out non-PDFs
-    const pdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    // Filter for PDFs and images
+    const validFiles = files.filter(f => {
+        const type = f.type;
+        const name = f.name.toLowerCase();
+        return type === 'application/pdf' || name.endsWith('.pdf') ||
+               type.startsWith('image/') || name.match(/\.(jpg|jpeg|png|webp)$/);
+    });
     
-    if (pdfs.length === 0) {
-        alert('Please select valid PDF files.');
+    if (validFiles.length === 0) {
+        alert('Please select valid PDF or image files.');
         return;
     }
 
-    selectedFiles = pdfs;
+    selectedFiles = validFiles;
     updateFileList();
     compressBtn.disabled = false;
 }
@@ -94,6 +99,8 @@ compressBtn.addEventListener('click', async () => {
     
     selectedFiles.forEach(file => {
         formData.append('pdfs', file);
+        // Append relative path if it exists (for folders), else just the filename
+        formData.append('paths', file.webkitRelativePath || file.name);
     });
 
     // UI Updates
@@ -127,10 +134,14 @@ compressBtn.addEventListener('click', async () => {
             : 0;
             
         if (result.originalSize === result.compressedSize || savedPercent <= 0) {
-            statsDiv.innerHTML = `<strong>Size:</strong> ${origSize} (No compression occurred. Note: Local testing requires Ghostscript installed to actually compress.)`;
+            statsDiv.innerHTML = `<strong>Size:</strong> ${origSize} (No compression occurred. Note: Local testing requires Ghostscript installed to actually compress PDFs.)`;
             statsDiv.style.color = '#92400e'; // dark yellow/orange for warning
         } else {
             statsDiv.innerHTML = `<strong>Original Size:</strong> ${origSize} <br> <strong>New Size:</strong> ${compSize} <br> <strong style="color:var(--success);">Saved ${savedPercent}%!</strong>`;
+        }
+        
+        if (result.duplicatesRemoved > 0) {
+            statsDiv.innerHTML += `<br><strong style="color:var(--success);">Removed ${result.duplicatesRemoved} identical duplicate files!</strong>`;
         }
 
         // Show results

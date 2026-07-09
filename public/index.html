@@ -18,9 +18,10 @@
 
         <main>
             <div class="upload-section" id="drop-area">
-                <input type="file" id="fileElem" multiple accept="application/pdf">
-                <label class="button" for="fileElem">Select PDFs</label>
-                <p>or drag and drop your PDFs here</p>
+                <!-- Add webkitdirectory and directory to support folder uploads -->
+                <input type="file" id="fileElem" multiple webkitdirectory directory accept="application/pdf,image/jpeg,image/png,image/webp">
+                <label class="button" for="fileElem">Select Folder or Files</label>
+                <p>or drag and drop your folders/files here</p>
                 <div id="file-list" class="file-list"></div>
             </div>
 
