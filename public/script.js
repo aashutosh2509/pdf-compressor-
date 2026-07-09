@@ -1,5 +1,6 @@
 const dropArea = document.getElementById('drop-area');
 const fileElem = document.getElementById('fileElem');
+const folderElem = document.getElementById('folderElem');
 const fileList = document.getElementById('file-list');
 const compressBtn = document.getElementById('compress-btn');
 const loading = document.getElementById('loading');
@@ -29,6 +30,7 @@ function preventDefaults(e) {
 
 dropArea.addEventListener('drop', handleDrop, false);
 fileElem.addEventListener('change', handleFiles, false);
+folderElem.addEventListener('change', handleFiles, false);
 
 function handleDrop(e) {
     const dt = e.dataTransfer;

@@ -72,7 +72,7 @@ header p {
     background: var(--ring);
 }
 
-#fileElem {
+#fileElem, #folderElem {
     display: none;
 }
 
