@@ -87,6 +87,7 @@ header p {
     text-align: left;
     max-height: 150px;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .file-item {
@@ -100,6 +101,19 @@ header p {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.file-item span:first-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 1rem;
+    max-width: 75%;
+}
+
+.file-item span:last-child {
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .options-section {
