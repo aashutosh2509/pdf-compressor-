@@ -26,9 +26,9 @@ body {
     line-height: 1.5;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start; /* Fixes top being cut off on smaller screens */
     min-height: 100vh;
-    padding: 2rem;
+    padding: 3rem 1rem;
 }
 
 .container {
