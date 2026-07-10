@@ -50,7 +50,24 @@ function compressPDF(inputPath, outputPath, quality) {
         if (quality === 'maximum') pdfSettings = '/prepress';
         if (quality === 'medium') pdfSettings = '/ebook';
         
-        const gsCmd = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -dAutoRotatePages=/None -dUseCropBox -sOutputFile="${outputPath}" "${inputPath}"`;
+        // Detect OS and use appropriate Ghostscript command
+        let gsCommand = 'gs';
+        if (process.platform === 'win32') {
+            gsCommand = 'gswin64c'; // Default to PATH if installed there
+            const gsBaseDir = 'C:\\Program Files\\gs';
+            if (fs.existsSync(gsBaseDir)) {
+                const versions = fs.readdirSync(gsBaseDir);
+                for (const version of versions) {
+                    const exePath = path.join(gsBaseDir, version, 'bin', 'gswin64c.exe');
+                    if (fs.existsSync(exePath)) {
+                        gsCommand = `"${exePath}"`; // Use absolute path with quotes
+                        break;
+                    }
+                }
+            }
+        }
+        
+        const gsCmd = `${gsCommand} -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -dAutoRotatePages=/None -dUseCropBox -sOutputFile="${outputPath}" "${inputPath}"`;
         
         exec(gsCmd, (error, stdout, stderr) => {
             if (error) {
