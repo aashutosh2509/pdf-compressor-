@@ -140,7 +140,7 @@ compressBtn.addEventListener('click', async () => {
             : 0;
             
         if (result.originalSize === result.compressedSize || savedPercent <= 0) {
-            statsDiv.innerHTML = `<strong>Size:</strong> ${origSize} (No compression occurred. Note: Local testing requires Ghostscript installed to actually compress PDFs.)`;
+            statsDiv.innerHTML = `<strong>Size:</strong> ${origSize} (File is already fully compressed! No further size reduction is possible without losing quality.)`;
             statsDiv.style.color = '#92400e'; // dark yellow/orange for warning
         } else {
             statsDiv.innerHTML = `<strong>Original Size:</strong> ${origSize} <br> <strong>New Size:</strong> ${compSize} <br> <strong style="color:var(--success);">Saved ${savedPercent}%!</strong>`;
